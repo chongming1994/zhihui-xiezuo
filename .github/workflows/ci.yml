@@ -42,14 +42,14 @@ jobs:
             '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
             '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
             '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
-            | node bin/zhihui-xiezuo-mcp.js > /tmp/mcp-out.txt 2>/tmp/mcp-err.txt
-          echo "--- stdout ---"; cat /tmp/mcp-out.txt
-          echo "--- stderr ---"; cat /tmp/mcp-err.txt
+            | node bin/zhihui-xiezuo-mcp.js > mcp-out.txt 2>mcp-err.txt
+          echo "--- stdout ---"; cat mcp-out.txt
+          echo "--- stderr ---"; cat mcp-err.txt
           # stdout 必须恰好 2 行，且每行都是合法 JSON
-          test "$(wc -l < /tmp/mcp-out.txt | tr -d ' ')" = "2"
+          test "$(wc -l < mcp-out.txt | tr -d ' ')" = "2"
           node -e "
             const fs=require('fs');
-            const lines=fs.readFileSync('/tmp/mcp-out.txt','utf8').trim().split('\n');
+            const lines=fs.readFileSync('mcp-out.txt','utf8').trim().split('\n');
             if(lines.length!==2) throw new Error('stdout 行数应为 2，实际 '+lines.length);
             for(const l of lines) JSON.parse(l);
             const tools=JSON.parse(lines[1]).result.tools;
