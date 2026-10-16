@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: test (${{ matrix.os }} / node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: 安装依赖
+        run: npm install --no-audit --no-fund
+
+      - name: 运行测试
+        run: npm test
+
+      # 跨平台冒烟：CLI 帮助能跑通、不崩溃
+      - name: CLI 冒烟
+        run: node bin/zhihui-xiezuo.js --help
+        shell: bash
+
+      # MCP 冒烟：验证 stdio 协议通道干净（stdout 只有协议流量）
+      - name: MCP stdio 冒烟
+        shell: bash
+        run: |
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+            | node bin/zhihui-xiezuo-mcp.js > /tmp/mcp-out.txt 2>/tmp/mcp-err.txt
+          echo "--- stdout ---"; cat /tmp/mcp-out.txt
+          echo "--- stderr ---"; cat /tmp/mcp-err.txt
+          # stdout 必须恰好 2 行，且每行都是合法 JSON
+          test "$(wc -l < /tmp/mcp-out.txt | tr -d ' ')" = "2"
+          node -e "
+            const fs=require('fs');
+            const lines=fs.readFileSync('/tmp/mcp-out.txt','utf8').trim().split('\n');
+            if(lines.length!==2) throw new Error('stdout 行数应为 2，实际 '+lines.length);
+            for(const l of lines) JSON.parse(l);
+            const tools=JSON.parse(lines[1]).result.tools;
+            if(tools.length!==10) throw new Error('工具数应为 10，实际 '+tools.length);
+            console.log('✅ MCP 冒烟通过：stdout 2 行合法 JSON-RPC，10 个工具');
+          "
+
+      # 隐私回归守卫：个人路径 / 真实会话 ID 不得进入仓库
+      - name: 隐私扫描
+        shell: bash
+        run: |
+          if grep -rn "/home/wdg\|wdg-IMINI\|corum-task\|文档/deepseek-harness\|Agent协作项目" \
+               src bin test README.md package.json 2>/dev/null; then
+            echo "❌ 检测到个人路径或私有标识"
+            exit 1
+          fi
+          echo "✅ 无个人路径泄漏"
