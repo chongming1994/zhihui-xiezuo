@@ -3,10 +3,18 @@
  * @module zhihui-xiezuo/test/helpers
  */
 
+import assert from 'node:assert/strict'
 import { mkdtemp, readFile, stat, writeFile, chmod } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { main } from '../src/cli.js'
+
+/**
+ * 当前是否运行在 Windows 上。
+ *
+ * 用途：把「权限位」这类只有 POSIX 才有意义的断言与平台相关的验证分支区分开。
+ */
+export const IS_WINDOWS = process.platform === 'win32'
 
 /**
  * 建立隔离的临时状态目录。
@@ -73,6 +81,28 @@ export async function writeTaskFile(dir, name, text) {
 export async function modeOf(file) {
   const info = await stat(file)
   return (info.mode & 0o777).toString(8)
+}
+
+/**
+ * 断言一个文件/目录的权限位，按平台分派。
+ *
+ * - POSIX：精确断言 `mode & 0o777` 等于 `expected`（强度不因跨平台而放松）。
+ * - Windows：`fs.stat().mode` 由 libuv 合成，恒为 `0o666`（只读时 `0o444`），与真实访问权限
+ *   无关，mode 位断言必然失败也无意义。Windows 上的权限由 ACL 保证，见 `src/secret-input.js`
+ *   的 win32 分支（用 `icacls` 判断宽泛主体）。因此这里退化为断言**路径存在**；调用方在该
+ *   测试里对内容/可读性/字段的其它断言照旧全部保留。
+ * @param {string} file - 路径。
+ * @param {string} expected - POSIX 期望的八进制权限，如 `'600'`。
+ * @param {string} [message] - 断言失败时的说明。
+ * @returns {Promise<void>} 通过时正常返回。
+ */
+export async function assertMode(file, expected, message) {
+  if (IS_WINDOWS) {
+    // Windows 上 mode 由 libuv 合成，恒为 666，权限由 ACL 保证，见 src/secret-input.js。
+    await stat(file)
+    return
+  }
+  assert.equal(await modeOf(file), expected, message)
 }
 
 export { readFile }

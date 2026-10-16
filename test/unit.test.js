@@ -10,7 +10,7 @@ import { analyze, EventLog, extractText, isFinalPhase, PHASE, replayInbox } from
 import { findSecretKeys, redactHeaders, redactText, redactUrl } from '../src/redact.js'
 import { Paths, ensureHome, readCredential, readJson, writeCredential } from '../src/config.js'
 import { RequestStore, REQUEST_STATE, digestOf, withLock } from '../src/store.js'
-import { makeTempHome, modeOf } from './helpers.js'
+import { assertMode, makeTempHome } from './helpers.js'
 
 /** 构造事件序列生成器。 */
 function series() {
@@ -307,13 +307,13 @@ test('存储：请求记录 0600、目录 0700、摘要稳定', async () => {
   const home = await makeTempHome()
   const paths = new Paths(home)
   await ensureHome(paths)
-  assert.equal(await modeOf(home), '700')
+  await assertMode(home, '700')
   const store = new RequestStore(paths)
   const { record } = await store.createOrGet({
     requestId: 'req-1', sessionId: 'sess-alpha', baseUrl: 'http://127.0.0.1:3080', mode: 'queue', text: '你好',
   })
   assert.equal(record.state, REQUEST_STATE.PREPARED)
-  assert.equal(await modeOf(paths.request(record.requestId)), '600')
+  await assertMode(paths.request(record.requestId), '600')
   assert.equal(record.contentDigest, digestOf('你好'))
   assert.notEqual(digestOf('你好'), digestOf('你好 '))
 })
@@ -323,7 +323,7 @@ test('存储：凭据单独保存且为 0600', async () => {
   const paths = new Paths(home)
   await ensureHome(paths)
   await writeCredential(paths, { authority: '127.0.0.1:3080', cookieName: 'dsh-auth-x', cookieValue: 'v1.a.b' })
-  assert.equal(await modeOf(paths.credential), '600')
+  await assertMode(paths.credential, '600')
   const read = await readCredential(paths)
   assert.equal(read.cookieName, 'dsh-auth-x')
   const config = await readJson(paths.config, null)

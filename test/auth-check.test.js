@@ -6,10 +6,34 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { chmod, readFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { MockDsh } from './mock-dsh.js'
-import { makeTempHome, modeOf, runCli, writeTokenFile } from './helpers.js'
+import { IS_WINDOWS, assertMode, makeTempHome, runCli, writeTokenFile } from './helpers.js'
 import { Paths, readConfig, readCredential } from '../src/config.js'
 import { EXIT } from '../src/errors.js'
+
+const execFileAsync = promisify(execFile)
+
+/**
+ * 在 Windows 上给文件授出 Everyone 读权限，构造一个「过宽 ACL」。
+ *
+ * 用知名 SID `*S-1-1-0`（Everyone）而不是账户名，这样不受 Windows 本地化语言影响
+ * （中文/英文系统上 Everyone 的显示名不同，SID 恒定）。走 `execFile`，不经 shell。
+ * `icacls` 不可用时**明确失败**，绝不静默通过。
+ * @param {string} file - 文件路径。
+ * @returns {Promise<void>} 完成后返回。
+ */
+async function grantEveryoneRead(file) {
+  try {
+    await execFileAsync('icacls', [file, '/grant', '*S-1-1-0:R'], { windowsHide: true })
+  } catch (error) {
+    assert.fail(
+      `Windows 上需要 icacls 构造过宽 ACL 才能验证此行为，但执行失败：`
+      + `${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+}
 
 /** 启动模拟服务与临时目录。 */
 async function setup(options = {}) {
@@ -29,7 +53,7 @@ test('auth：正常令牌换 Cookie，输出不含令牌与 Cookie 值', async (
     assert.ok(!result.stdout.includes(mock.cookieValue), '输出不得包含 Cookie 值')
     assert.match(result.stdout, /认证成功/u)
     const paths = new Paths(home)
-    assert.equal(await modeOf(paths.credential), '600')
+    await assertMode(paths.credential, '600')
     const credential = await readCredential(paths)
     assert.equal(credential.cookieName, mock.cookieName)
     assert.equal(credential.cookieValue, mock.cookieValue)
@@ -59,8 +83,15 @@ test('auth：拒绝权限过宽的令牌文件', async () => {
   const { mock, baseUrl, home } = await setup()
   try {
     const file = await writeTokenFile(home, 'whatever')
-    await chmod(file, 0o644)
+    if (IS_WINDOWS) {
+      // Windows 上 chmod 只能切换只读位，造不出「过宽权限」，真实权限由 ACL 决定。
+      // 这里真的把 Everyone 读权限授出去，让本测试在 Windows 上仍是一条有意义的验证。
+      await grantEveryoneRead(file)
+    } else {
+      await chmod(file, 0o644)
+    }
     const result = await runCli(['auth', '--url', baseUrl, '--token-file', file], home)
+    // EXIT.USAGE 是 src/errors.js 里的平台无关常量（恒为 2），Windows 上取值相同。
     assert.equal(result.exitCode, EXIT.USAGE)
     assert.match(result.stderr, /权限/u)
   } finally {
@@ -202,7 +233,7 @@ test('凭据文件内容确实保存在 0600 文件中（并非常量）', async
     await runCli(['auth', '--url', baseUrl, '--token-file', file], home)
     const raw = await readFile(new Paths(home).credential, 'utf8')
     assert.ok(raw.includes(mock.cookieValue))
-    assert.equal(await modeOf(new Paths(home).credential), '600')
+    await assertMode(new Paths(home).credential, '600')
   } finally {
     await mock.stop()
   }

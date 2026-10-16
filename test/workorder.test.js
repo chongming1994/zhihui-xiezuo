@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { makeTempHome, modeOf, runCli } from './helpers.js'
+import { assertMode, makeTempHome, runCli } from './helpers.js'
 import { EXIT } from '../src/errors.js'
 
 /** 契约 §2 的阶段名固定集合。 */
@@ -63,10 +63,10 @@ test('init：目录 0700、文件 0600、无 .tmp 残留、字段齐全；无 --
     '--authorize', '--reason', '用户已授权', '--coordinator', 'sess-coord', '--max-rounds', '3',
   ])
   const dir = join(home, 'workorders')
-  assert.equal(await modeOf(dir), '700', '工作单目录必须是 0700')
+  await assertMode(dir, '700', '工作单目录必须是 0700')
 
   const file = woPath(home, record.workOrderId)
-  assert.equal(await modeOf(file), '600', '工作单文件必须是 0600')
+  await assertMode(file, '600', '工作单文件必须是 0600')
 
   const entries = await readdir(dir)
   assert.ok(entries.every(name => !name.includes('.tmp')), `目录不得残留 .tmp：${entries.join(', ')}`)
