@@ -1,0 +1,49 @@
+{
+  "name": "zhihui-xiezuo",
+  "version": "0.1.0",
+  "private": false,
+  "description": "智慧协作体系（zhihui-xiezuo）的第一个模块 —— DSH 会话桥：接入一个已在运行的本机 DeepSeek Harness (DSH) Web 实例，列会话、只读核对、绑定会话、向指定会话投递任务并取回该回合回复。提供 CLI 与 MCP(stdio) 双入口，Windows/macOS/Linux 可用。",
+  "type": "module",
+  "license": "MIT",
+  "author": "chongming1994",
+  "keywords": [
+    "zhihui-xiezuo",
+    "dsh",
+    "deepseek-harness",
+    "mcp",
+    "model-context-protocol",
+    "bridge",
+    "session-bridge",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chongming1994/zhihui-xiezuo.git"
+  },
+  "bugs": {
+    "url": "https://github.com/chongming1994/zhihui-xiezuo/issues"
+  },
+  "homepage": "https://github.com/chongming1994/zhihui-xiezuo#readme",
+  "bin": {
+    "zhihui-xiezuo": "bin/zhihui-xiezuo.js",
+    "zhihui-xiezuo-mcp": "bin/zhihui-xiezuo-mcp.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "src/",
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "start": "node bin/zhihui-xiezuo.js",
+    "mcp": "node bin/zhihui-xiezuo-mcp.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "@modelcontextprotocol/sdk": "^1.32.1"
+  }
+}
